@@ -22,3 +22,9 @@ The application can be deployed and manually invoked using hardhat.
 On Optimism Goerli:
 
     yarn hardhat run scripts/deploy.js --network optimism-goerli
+
+## Developer Note
+
+I updated the contract to perform and keccak256 as a pure public function, ensuring both internal and external encoded values match.
+
+Implemented FraudDetected and BetRevealed events for better clarity.

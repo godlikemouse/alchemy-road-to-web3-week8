@@ -90,9 +90,17 @@ contract Casino {
         return uint(keccak256(abi.encodePacked(value)));
     }
 
+    function cleanUp(uint _hashA) internal {
+        delete proposedBet[_hashA];
+        delete acceptedBet[_hashA];
+    }
+
     // Called by sideA to reveal their random value and conclude the bet
     function reveal(uint _hashA, uint _random) external {
         require(proposedBet[_hashA].accepted, "Bet has not been accepted yet");
+
+        address payable _sideA = payable(proposedBet[_hashA].sideA);
+        address payable _sideB = payable(acceptedBet[_hashA].sideB);
 
         //find proposed bet by sender address and hashA
         if (proposedBet[_hashA].sideA == msg.sender) {
@@ -101,11 +109,9 @@ contract Casino {
             // check for fraud
             if (proposedBet[_hashA].hashA != encode(_random)) {
                 // fraud from side A, side B wins by default
-                address payable _sideA = payable(proposedBet[_hashA].sideA);
-                address payable _sideB = payable(acceptedBet[_hashA].sideB);
-                _sideB.transfer(2 * proposedBet[_hashA].value);
-
                 emit FraudDetected(_hashA, _sideA);
+
+                _sideB.transfer(2 * proposedBet[_hashA].value);
 
                 emit BetSettled(
                     _hashA,
@@ -114,11 +120,10 @@ contract Casino {
                     proposedBet[_hashA].value
                 );
 
-                delete proposedBet[_hashA];
-                delete acceptedBet[_hashA];
-                return;
+                return cleanUp(_hashA);
             }
 
+            // side A reveal correctly submitted
             proposedBet[_hashA].randomA = _random;
             proposedBet[_hashA].reveal = true;
 
@@ -129,11 +134,9 @@ contract Casino {
             // check for fraud
             if (acceptedBet[_hashA].hashB != encode(_random)) {
                 // fraud from side B, side A wins by default
-                address payable _sideA = payable(proposedBet[_hashA].sideA);
-                address payable _sideB = payable(acceptedBet[_hashA].sideB);
-                _sideA.transfer(2 * proposedBet[_hashA].value);
-
                 emit FraudDetected(_hashA, _sideB);
+
+                _sideA.transfer(2 * proposedBet[_hashA].value);
 
                 emit BetSettled(
                     _hashA,
@@ -142,11 +145,10 @@ contract Casino {
                     proposedBet[_hashA].value
                 );
 
-                delete proposedBet[_hashA];
-                delete acceptedBet[_hashA];
-                return;
+                return cleanUp(_hashA);
             }
 
+            // side B reveal correctly submitted
             acceptedBet[_hashA].randomB = _random;
             acceptedBet[_hashA].reveal = true;
 
@@ -158,11 +160,8 @@ contract Casino {
         if (proposedBet[_hashA].reveal && acceptedBet[_hashA].reveal) {
             // both sides have submitted real values, announce winner
 
-            address payable _sideA = payable(proposedBet[_hashA].sideA);
-            address payable _sideB = payable(acceptedBet[_hashA].sideB);
             uint256 _randomA = proposedBet[_hashA].randomA;
             uint256 _randomB = acceptedBet[_hashA].randomB;
-
             uint256 _agreedRandom = _randomA ^ _randomB;
             uint256 _value = proposedBet[_hashA].value;
 
@@ -171,45 +170,12 @@ contract Casino {
                 _sideA.transfer(2 * _value);
                 emit BetSettled(_hashA, _sideA, _sideB, _value);
             } else {
+                // side B wins
                 _sideB.transfer(2 * _value);
                 emit BetSettled(_hashA, _sideB, _sideA, _value);
             }
 
-            // Cleanup
-            delete proposedBet[_hashA];
-            delete acceptedBet[_hashA];
+            cleanUp(_hashA);
         }
-
-        /*
-        uint _commitment = uint256(keccak256(abi.encodePacked(_random)));
-        address payable _sideA = payable(msg.sender);
-        address payable _sideB = payable(acceptedBet[_commitment].sideB);
-        uint _agreedRandom = _random ^ acceptedBet[_commitment].randomB;
-        uint _value = proposedBet[_commitment].value;
-
-        require(
-            proposedBet[_commitment].sideA == msg.sender,
-            "Not a bet you placed or wrong value"
-        );
-        require(
-            proposedBet[_commitment].accepted,
-            "Bet has not been accepted yet"
-        );
-
-        // Pay and emit an event
-        if (_agreedRandom % 2 == 0) {
-            // sideA wins
-            _sideA.transfer(2 * _value);
-            emit BetSettled(_commitment, _sideA, _sideB, _value);
-        } else {
-            // sideB wins
-            _sideB.transfer(2 * _value);
-            emit BetSettled(_commitment, _sideB, _sideA, _value);
-        }
-
-        // Cleanup
-        delete proposedBet[_commitment];
-        delete acceptedBet[_commitment];
-        */
     } // function reveal
 } // contract Casino
